@@ -13,6 +13,8 @@ pub(crate) enum Media {
   Text,
   Unknown,
   Video,
+  Gzip, // Added Gzip media type
+  Brotli, // Added Brotli media type
 }
 
 impl Media {
