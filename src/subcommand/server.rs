@@ -856,8 +856,6 @@ impl Server {
       }
       Media::Unknown => Ok(PreviewUnknownHtml.into_response()),
       Media::Video => Ok(PreviewVideoHtml { inscription_id }.into_response()),
-      Media::Gzip => Ok(PreviewGzipHtml { inscription_id }.into_response()),
-      Media::Brotli => Ok(PreviewBrotliHtml { inscription_id }.into_response()),
     }
   }
 
