@@ -13,8 +13,6 @@ pub(crate) enum Media {
   Text,
   Unknown,
   Video,
-  Gzip, // Added Gzip media type
-  Brotli, // Added Brotli media type
 }
 
 impl Media {
@@ -42,8 +40,8 @@ impl Media {
     ("text/markdown;charset=utf-8", Media::Text, &["md"]),
     ("video/mp4", Media::Video, &["mp4"]),
     ("video/webm", Media::Video, &["webm"]),
-    ("application/gzip", Media::Gzip, &["gz"]),
-    ("application/brotli", Media::Brotli, &["br"]),
+    ("application/gzip", Media::Unknown, &["gz"]),
+    ("application/brotli", Media::Unknown, &["br"]),
   ];
 
   pub(crate) fn content_type_for_path(path: &Path) -> Result<&'static str, Error> {
