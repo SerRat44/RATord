@@ -12,7 +12,7 @@ forbid:
   ./bin/forbid
 
 fmt:
-  cargo fmt
+  cargo fmt --all
 
 clippy:
   cargo clippy --all --all-targets -- -D warnings
@@ -35,6 +35,13 @@ deploy-mainnet branch="master": (deploy branch "main" "ordinals.net")
 deploy-signet branch="master": (deploy branch "signet" "signet.ordinals.net")
 
 deploy-testnet branch="master": (deploy branch "test" "testnet.ordinals.net")
+
+ord-dev-save-state domain="ordinals-dev.com":
+  scp ./deploy/save-ord-dev-state root@{{domain}}:~
+  ssh root@{{domain}} "./save-ord-dev-state"
+
+ord-dev-deploy:
+  ./deploy/deploy-ord-dev
 
 log unit="ord" domain="ordinals.net":
   ssh root@{{domain}} 'journalctl -fu {{unit}}'
@@ -68,16 +75,6 @@ open:
 
 doc:
   cargo doc --all --open
-
-update-ord-dev:
-  ./bin/update-ord-dev
-
-rebuild-ord-dev-database: && update-ord-dev
-  systemctl stop ord-dev
-  rm -f /var/lib/ord-dev/index.redb
-  rm -f /var/lib/ord-dev/*/index.redb
-  journalctl --unit ord-dev --rotate
-  journalctl --unit ord-dev --vacuum-time 1s
 
 prepare-release revision='master':
   #!/usr/bin/env bash

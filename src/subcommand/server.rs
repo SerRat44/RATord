@@ -126,13 +126,17 @@ pub(crate) struct Server {
 impl Server {
   pub(crate) fn run(self, options: Options, index: Arc<Index>, handle: Handle) -> Result {
     Runtime::new()?.block_on(async {
-      let clone = index.clone();
-      thread::spawn(move || loop {
-        if let Err(error) = clone.update() {
+      let index_clone = index.clone();
+      let index_thread = thread::spawn(move || loop {
+        if SHUTTING_DOWN.load(atomic::Ordering::Relaxed) {
+          break;
+        }
+        if let Err(error) = index_clone.update() {
           log::warn!("{error}");
         }
         thread::sleep(Duration::from_millis(5000));
       });
+      INDEXER.lock().unwrap().replace(index_thread);
 
       let config = options.load_config()?;
       let acme_domains = self.acme_domains()?;
@@ -301,7 +305,9 @@ impl Server {
     if !self.acme_domain.is_empty() {
       Ok(self.acme_domain.clone())
     } else {
-      Ok(vec![sys_info::hostname()?])
+      Ok(vec![System::new()
+        .host_name()
+        .ok_or(anyhow!("no hostname found"))?])
     }
   }
 
@@ -384,7 +390,7 @@ impl Server {
         sat,
         satpoint,
         blocktime: index.block_time(sat.height())?,
-        inscription: index.get_inscription_id_by_sat(sat)?,
+        inscriptions: index.get_inscription_ids_by_sat(sat)?,
       }
       .page(page_config, index.has_sat_index()?),
     )
@@ -416,7 +422,7 @@ impl Server {
 
       TxOut {
         value,
-        script_pubkey: Script::new(),
+        script_pubkey: ScriptBuf::new(),
       }
     } else {
       index
@@ -794,12 +800,18 @@ impl Server {
       header::CONTENT_SECURITY_POLICY,
       HeaderValue::from_static("default-src *:*/content/ *:*/blockheight *:*/blockhash *:*/blockhash/ *:*/blocktime 'unsafe-eval' 'unsafe-inline' data: blob:"),
     );
+
+    let body = inscription.into_body();
+    let cache_control = match body {
+      Some(_) => "max-age=31536000, immutable",
+      None => "max-age=600",
+    };
     headers.insert(
       header::CACHE_CONTROL,
-      HeaderValue::from_static("max-age=31536000, immutable"),
+      HeaderValue::from_str(cache_control).unwrap(),
     );
 
-    Some((headers, inscription.into_body()?))
+    Some((headers, body?))
   }
 
   async fn preview(
@@ -985,7 +997,7 @@ mod tests {
     fn new_with_regtest() -> Self {
       Self::new_server(
         test_bitcoincore_rpc::builder()
-          .network(bitcoin::Network::Regtest)
+          .network(bitcoin::network::constants::Network::Regtest)
           .build(),
         None,
         &["--chain", "regtest"],
@@ -1332,7 +1344,7 @@ mod tests {
     let (_, server) = parse_server_args("ord server");
     assert_eq!(
       server.acme_domains().unwrap(),
-      &[sys_info::hostname().unwrap()]
+      &[System::new().host_name().unwrap()]
     );
   }
 
@@ -1424,14 +1436,16 @@ mod tests {
   fn http_to_https_redirect_with_path() {
     TestServer::new_with_args(&[], &["--redirect-http-to-https", "--https"]).assert_redirect(
       "/sat/0",
-      &format!("https://{}/sat/0", sys_info::hostname().unwrap()),
+      &format!("https://{}/sat/0", System::new().host_name().unwrap()),
     );
   }
 
   #[test]
   fn http_to_https_redirect_with_empty() {
-    TestServer::new_with_args(&[], &["--redirect-http-to-https", "--https"])
-      .assert_redirect("/", &format!("https://{}/", sys_info::hostname().unwrap()));
+    TestServer::new_with_args(&[], &["--redirect-http-to-https", "--https"]).assert_redirect(
+      "/",
+      &format!("https://{}/", System::new().host_name().unwrap()),
+    );
   }
 
   #[test]
